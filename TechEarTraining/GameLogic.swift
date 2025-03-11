@@ -9,6 +9,7 @@ class GameLogic: ObservableObject {
     
     // Game state
     @Published var score = 0
+    @Published var totalTries = 0
     @Published var isCorrectGuess = false
     @Published var hasGuessed = false
     @Published var activeFrequency: Float = 0
@@ -45,6 +46,7 @@ class GameLogic: ObservableObject {
     // Reset the game
     func resetGame() {
         score = 0
+        totalTries = 0
         startNewRound()
     }
     
@@ -58,6 +60,7 @@ class GameLogic: ObservableObject {
     // Check if the user's guess is correct
     func checkGuess(frequency: Float, gain: Float) {
         hasGuessed = true
+        totalTries += 1
         
         // Store the user's guess
         tempFrequency = frequency

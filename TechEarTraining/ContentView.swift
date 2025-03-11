@@ -35,7 +35,7 @@ struct ContentView: View {
                 .padding()
             
             // Score display
-            Text("Score: \(gameLogic.score)")
+            Text("Score: \(gameLogic.score)/\(gameLogic.totalTries)")
                 .font(.title)
                 .padding()
             
@@ -53,7 +53,7 @@ struct ContentView: View {
                     Button(action: {
                         isShowingSamplePicker = true
                     }) {
-                        Text("Noise Types")
+                        Text("Audio Sources")
                             .font(.headline)
                             .padding()
                             .background(Color.green)

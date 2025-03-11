@@ -18,7 +18,7 @@ class AudioSystem: ObservableObject {
         }
     }
     
-    @Published var eqBypassed: Bool = false {
+    @Published var eqBypassed: Bool = true {
         didSet {
             updateSignalPath()
         }
