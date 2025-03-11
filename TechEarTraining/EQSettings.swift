@@ -9,9 +9,9 @@ class EQSettings {
     static let availableGains: [Float] = [-6, 6]
     
     // Standard settings
-    var centerFrequency: Float = 1000 // Default to 1kHz
-    var gain: Float = 6.0  // +6dB boost
-    var q: Float = 1.0     // Q value of 1.0
+    var centerFrequency: Float
+    var gain: Float
+    var q: Float
     
     init(frequency: Float = 1000, gain: Float = 6.0, q: Float = 1.0) {
         self.centerFrequency = frequency

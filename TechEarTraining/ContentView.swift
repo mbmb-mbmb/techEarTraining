@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     // Use StateObject to create and manage the audio system and game logic
-    @StateObject private var audioSystem = AudioSystem()
+    @StateObject private var audioSystem: AudioSystem
     @StateObject private var gameLogic: GameLogic
     
     // File picker state

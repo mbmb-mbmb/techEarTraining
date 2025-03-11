@@ -27,8 +27,6 @@ class GameLogic: ObservableObject {
         // Reset guess state
         hasGuessed = false
         isCorrectGuess = false
-        tempFrequency = 0
-        tempGain = 0
         
         // Randomize to a new EQ setting
         randomizeEQSettings()

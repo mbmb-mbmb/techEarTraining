@@ -1,7 +1,4 @@
 import SwiftUI
-import Foundation
-// Import GameLogic from the same module
-// No need for a separate import since it's in the same module
 
 // Reusable EQ button component
 struct EQButton: View {

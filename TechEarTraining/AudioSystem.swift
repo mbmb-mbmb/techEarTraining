@@ -182,11 +182,8 @@ class AudioSystem: ObservableObject {
         
         // If playing with EQ, briefly restart to ensure changes take effect
         if isPlaying && !eqBypassed {
-            let wasPlaying = isPlaying
-            if wasPlaying {
-                stopPlayback()
-                startPlayback()
-            }
+            stopPlayback()
+            startPlayback()
         }
     }
     
