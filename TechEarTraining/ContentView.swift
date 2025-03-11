@@ -7,17 +7,26 @@
 import SwiftUI
 import AudioKit
 import SoundpipeAudioKit
+import UniformTypeIdentifiers
 
 struct ContentView: View {
-    // Use StateObject to create and manage the audio system
+    // Use StateObject to create and manage the audio system and game logic
     @StateObject private var audioSystem = AudioSystem()
+    @StateObject private var gameLogic: GameLogic
     
-    // Game state
-    @State private var score = 0
-    @State private var isCorrectGuess = false
-    @State private var hasGuessed = false
-    @State private var activeFrequency: Float = 0
-    @State private var activeGain: Float = 0
+    // File picker state
+    @State private var isShowingFilePicker = false
+    @State private var isShowingSamplePicker = false
+    
+    // Initialize with audio system and game logic
+    init() {
+        // Create audio system first
+        let audioSystem = AudioSystem()
+        
+        // Then create game logic with the audio system
+        _audioSystem = StateObject(wrappedValue: audioSystem)
+        _gameLogic = StateObject(wrappedValue: GameLogic(audioSystem: audioSystem))
+    }
     
     var body: some View {
         VStack(spacing: 20) {
@@ -26,9 +35,46 @@ struct ContentView: View {
                 .padding()
             
             // Score display
-            Text("Score: \(score)")
+            Text("Score: \(gameLogic.score)")
                 .font(.title)
                 .padding()
+            
+            // Audio source info and picker buttons
+            VStack(spacing: 8) {
+                Text("Audio Source:")
+                    .font(.headline)
+                
+                Text(audioSystem.currentAudioFileName)
+                    .font(.subheadline)
+                    .padding(.bottom, 4)
+                
+                HStack(spacing: 15) {
+                    // Sample picker button
+                    Button(action: {
+                        isShowingSamplePicker = true
+                    }) {
+                        Text("Noise Types")
+                            .font(.headline)
+                            .padding()
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    
+                    // Custom file picker button
+                    Button(action: {
+                        isShowingFilePicker = true
+                    }) {
+                        Text("Load Audio File")
+                            .font(.headline)
+                            .padding()
+                            .background(Color.cyan)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                }
+            }
+            .padding(.bottom)
             
             // Volume control
             VStack {
@@ -57,10 +103,10 @@ struct ContentView: View {
                 ForEach([250, 500, 1000, 2000, 4000, 10000], id: \.self) { freq in
                     HStack(spacing: 10) {
                         // Boost button
-                        eqButton(frequency: Float(freq), gain: 6.0)
+                        EQButton(gameLogic: gameLogic, frequency: Float(freq), gain: 6.0)
                         
                         // Cut button
-                        eqButton(frequency: Float(freq), gain: -6.0)
+                        EQButton(gameLogic: gameLogic, frequency: Float(freq), gain: -6.0)
                     }
                 }
             }
@@ -78,16 +124,15 @@ struct ContentView: View {
                     Text(audioSystem.eqBypassed ? "EQ: Off" : "EQ: On")
                         .font(.headline)
                         .padding()
-                        .frame(width: 120)
+                        .frame(width: 150)
                         .background(audioSystem.eqBypassed ? Color.gray : Color.green)
                         .foregroundColor(.white)
                         .cornerRadius(10)
                 }
                 
-                // Start/Next Round button
+                // Reset button
                 Button(action: {
-                    score = 0 // Reset score counter
-                    startNewRound()
+                    gameLogic.resetGame()
                 }) {
                     Text("Reset")
                         .font(.headline)
@@ -114,108 +159,82 @@ struct ContentView: View {
             }
         }
         .padding()
-        .onAppear {
-            // Initialize with a random EQ setting but don't start playback yet
-            audioSystem.randomizeEQ()
-            activeFrequency = audioSystem.eqSettings.centerFrequency
-            activeGain = audioSystem.eqSettings.gain
-        }
-    }
-    
-    // Game functions
-    private func startNewRound() {
-        // Reset guess state
-        hasGuessed = false
-        isCorrectGuess = false
-        
-        // Randomize to a new EQ setting
-        audioSystem.randomizeEQ()
-        
-        // Store the active settings for comparison
-        activeFrequency = audioSystem.eqSettings.centerFrequency
-        activeGain = audioSystem.eqSettings.gain
-        
-        // Make sure EQ is on and noise is playing
-        if audioSystem.eqBypassed {
-            audioSystem.eqBypassed = false
-        }
-        
-        if !audioSystem.isPlaying {
-            audioSystem.togglePlayback()
-        }
-    }
-    
-    private func checkGuess(frequency: Float, gain: Float) {
-        hasGuessed = true
-        
-        // Check if the guess matches the current active settings
-        if frequency == activeFrequency && gain == activeGain {
-            isCorrectGuess = true
-            score += 1
-            
-            // Delay before starting the next round
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                startNewRound()
-            }
-        } else {
-            isCorrectGuess = false
-            
-            // Update the EQ to show what the user selected (for comparison)
-            let tempSettings = audioSystem.eqSettings
-            tempSettings.centerFrequency = frequency
-            tempSettings.gain = gain
-            audioSystem.eqSettings = tempSettings
-            
-            // Delay before showing the correct answer
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                // Restore the original settings to show the correct answer
-                let originalSettings = audioSystem.eqSettings
-                originalSettings.centerFrequency = activeFrequency
-                originalSettings.gain = activeGain
-                audioSystem.eqSettings = originalSettings
+        // File picker for custom audio files
+        .fileImporter(
+            isPresented: $isShowingFilePicker,
+            allowedContentTypes: [.audio],
+            allowsMultipleSelection: false
+        ) { result in
+            do {
+                guard let selectedURL = try result.get().first else { return }
                 
-                // Delay before starting a new round
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    startNewRound()
+                // Access the file's contents
+                if selectedURL.startAccessingSecurityScopedResource() {
+                    // Load the selected audio file
+                    let success = audioSystem.loadAudioFile(fileURL: selectedURL)
+                    
+                    // Always release the security-scoped resource when finished
+                    selectedURL.stopAccessingSecurityScopedResource()
+                    
+                    if !success {
+                        print("Failed to load audio file")
+                    }
+                } else {
+                    print("Failed to access the file")
+                }
+            } catch {
+                print("File selection error: \(error.localizedDescription)")
+            }
+        }
+        // Sample picker sheet
+        .sheet(isPresented: $isShowingSamplePicker) {
+            SamplePickerView(audioSystem: audioSystem, isPresented: $isShowingSamplePicker)
+        }
+    }
+}
+
+// Sample picker view
+struct SamplePickerView: View {
+    @ObservedObject var audioSystem: AudioSystem
+    @Binding var isPresented: Bool
+    
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(audioSystem.availableSamples) { sample in
+                    Button(action: {
+                        audioSystem.currentSample = sample
+                        isPresented = false
+                    }) {
+                        HStack {
+                            Text(sample.rawValue)
+                                .font(.headline)
+                            
+                            Spacer()
+                            
+                            if audioSystem.currentSample == sample {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
+            .navigationTitle("Select Audio Source")
+            .navigationBarItems(trailing: Button("Done") {
+                isPresented = false
+            })
         }
     }
-    
-    private func eqButton(frequency: Float, gain: Float) -> some View {
-        let isActive = activeFrequency == frequency && activeGain == gain
-        let buttonText = "\(Int(frequency)) Hz \(gain > 0 ? "+" : "")\(Int(gain))dB"
-        
-        return Button(action: {
-            checkGuess(frequency: frequency, gain: gain)
-        }) {
-            Text(buttonText)
-                .font(.system(size: 14, weight: .medium))
-                .padding(8)
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(backgroundColor(frequency: frequency, gain: gain))
-                )
-                .foregroundColor(.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isActive && hasGuessed && isCorrectGuess ? Color.white : Color.clear, lineWidth: 3)
-                )
-        }
-        .disabled(hasGuessed)
-    }
-    
-    private func backgroundColor(frequency: Float, gain: Float) -> Color {
-        if hasGuessed {
-            if activeFrequency == frequency && activeGain == gain {
-                return isCorrectGuess ? Color.green : Color.red
-            } else {
-                return gain > 0 ? Color.blue.opacity(0.5) : Color.orange.opacity(0.5)
-            }
-        } else {
-            return gain > 0 ? Color.blue : Color.orange
-        }
+}
+
+// UTType extension for audio files
+extension UTType {
+    static var audio: UTType {
+        UTType.audiovisualContent
     }
 }
 

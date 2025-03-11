@@ -7,14 +7,14 @@ import SwiftUI
 class AudioSystem: ObservableObject {
     // Audio engine and components
     private var engine = AudioEngine()
-    private var noiseGenerator: NoiseGenerator
+    private var audioPlayer: AudioPlayer
     private var eqProcessor: EQProcessor
     
     // Published properties for UI binding
     @Published var isPlaying = false
     @Published var volume: Double = 0.5 {
         didSet {
-            noiseGenerator.amplitude = AUValue(volume)
+            audioPlayer.amplitude = AUValue(volume)
         }
     }
     
@@ -30,10 +30,25 @@ class AudioSystem: ObservableObject {
         set { eqProcessor.settings = newValue }
     }
     
+    // Audio file state
+    @Published var currentAudioFileName: String = "White Noise (Default)"
+    @Published var currentSample: AudioSample = .whiteNoise {
+        didSet {
+            if currentSample != oldValue {
+                loadSample(currentSample)
+            }
+        }
+    }
+    
+    // Available samples
+    var availableSamples: [AudioSample] {
+        return AudioSample.allCases
+    }
+    
     init() {
         // Create components
-        self.noiseGenerator = NoiseGenerator(amplitude: 0.5)
-        self.eqProcessor = EQProcessor(inputNode: noiseGenerator.whiteNoise)
+        self.audioPlayer = AudioPlayer(amplitude: 0.5)
+        self.eqProcessor = EQProcessor(inputNode: audioPlayer.player)
         
         // Setup initial connections
         updateSignalPath()
@@ -51,7 +66,7 @@ class AudioSystem: ObservableObject {
         
         // Set the output based on bypass state
         if eqBypassed {
-            engine.output = noiseGenerator.whiteNoise  // Bypass EQ
+            engine.output = audioPlayer.player  // Bypass EQ
         } else {
             engine.output = eqProcessor.equalizer      // Use EQ
         }
@@ -62,12 +77,70 @@ class AudioSystem: ObservableObject {
         }
     }
     
+    // MARK: - Audio file loading
+    
+    // Load an audio file from a URL
+    func loadAudioFile(fileURL: URL) -> Bool {
+        let success = audioPlayer.loadAudioFile(fileURL: fileURL)
+        
+        if success {
+            // Get the file name for display
+            currentAudioFileName = fileURL.lastPathComponent
+            currentSample = .customFile
+            
+            // Update connections
+            eqProcessor = EQProcessor(inputNode: audioPlayer.player)
+            updateSignalPath()
+        }
+        
+        return success
+    }
+    
+    // Load a sample from the cookbook
+    func loadSample(_ sample: AudioSample) -> Bool {
+        print("AudioSystem: Loading sample \(sample.rawValue)")
+        
+        // Stop playback temporarily
+        let wasPlaying = isPlaying
+        if wasPlaying {
+            stopPlayback()
+        }
+        
+        // Load the sample
+        let success = audioPlayer.loadSample(sample)
+        
+        if success {
+            // Update the display name
+            currentAudioFileName = sample.rawValue
+            currentSample = sample
+            
+            // Recreate the EQ processor with the new source
+            print("AudioSystem: Reconnecting signal chain")
+            eqProcessor = EQProcessor(inputNode: audioPlayer.player)
+            updateSignalPath()
+            
+            // Resume playback if it was playing
+            if wasPlaying {
+                startPlayback()
+            }
+        } else {
+            print("AudioSystem: Failed to load sample \(sample.rawValue)")
+        }
+        
+        return success
+    }
+    
+    // Show file picker to select audio
+    func showAudioFilePicker() {
+        // This will be implemented in the UI layer
+    }
+    
     // MARK: - Playback control
     
     // Start audio playback
     func startPlayback() {
-        // Start the noise generator
-        noiseGenerator.start()
+        // Start the audio player
+        audioPlayer.start()
         
         // Start the audio engine
         do {
@@ -80,8 +153,8 @@ class AudioSystem: ObservableObject {
     
     // Stop audio playback
     func stopPlayback() {
-        // Stop the noise generator
-        noiseGenerator.stop()
+        // Stop the audio player
+        audioPlayer.stop()
         
         // Stop the audio engine
         engine.stop()
